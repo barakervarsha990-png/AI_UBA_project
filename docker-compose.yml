@@ -1,0 +1,47 @@
+version: '3.9'
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: itd-mongo
+    restart: unless-stopped
+    ports:
+      - '27017:27017'
+    volumes:
+      - mongo_data:/data/db
+
+  ml-service:
+    build: ./ml-service
+    container_name: itd-ml-service
+    restart: unless-stopped
+    ports:
+      - '8001:8001'
+    env_file:
+      - ./ml-service/.env
+
+  backend:
+    build: ./backend
+    container_name: itd-backend
+    restart: unless-stopped
+    ports:
+      - '5000:5000'
+    env_file:
+      - ./backend/.env
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/insider_threat_db
+      - ML_SERVICE_URL=http://ml-service:8001
+    depends_on:
+      - mongo
+      - ml-service
+
+  frontend:
+    build: ./frontend
+    container_name: itd-frontend
+    restart: unless-stopped
+    ports:
+      - '3000:80'
+    depends_on:
+      - backend
+
+volumes:
+  mongo_data:

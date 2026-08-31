@@ -1,0 +1,209 @@
+/*
+  Design tokens — "Night Watch" SOC theme.
+  Palette:
+    --bg-void:    #070B14   deep near-black navy, the "screen off" base
+    --bg-panel:   #0E1524   panel surfaces
+    --bg-raised:  #131B2E   raised/hover surfaces
+    --line:       #1E2A42   hairline dividers
+    --text-hi:    #E7ECF5   primary text
+    --text-mid:   #8C9AB5   secondary text
+    --text-low:   #5A6789   tertiary / disabled
+    --signal-cyan:#33E6C9   "all clear" telemetry accent (unusual choice vs. default teal/blue)
+    --sev-low:    #33E6C9
+    --sev-medium: #F2C14E
+    --sev-high:   #F2884B
+    --sev-critical:#FF4D6D
+  Type:
+    Display: Space Grotesk (technical, geometric — reads like instrumentation, not marketing)
+    Body: IBM Plex Sans
+    Data/mono: JetBrains Mono (all numbers, IDs, IPs, timestamps run in mono — the signature)
+*/
+
+:root {
+  --bg-void: #070b14;
+  --bg-panel: #0e1524;
+  --bg-raised: #131b2e;
+  --line: #1e2a42;
+  --text-hi: #e7ecf5;
+  --text-mid: #8c9ab5;
+  --text-low: #5a6789;
+  --signal-cyan: #33e6c9;
+  --sev-low: #33e6c9;
+  --sev-medium: #f2c14e;
+  --sev-high: #f2884b;
+  --sev-critical: #ff4d6d;
+
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-body: 'IBM Plex Sans', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg-void);
+  color: var(--text-hi);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  background-image:
+    radial-gradient(circle at 15% 0%, rgba(51, 230, 201, 0.05), transparent 45%),
+    radial-gradient(circle at 85% 20%, rgba(255, 77, 109, 0.04), transparent 40%);
+  background-attachment: fixed;
+}
+
+a { color: inherit; text-decoration: none; }
+button { font-family: inherit; }
+
+.mono { font-family: var(--font-mono); letter-spacing: -0.01em; }
+.display { font-family: var(--font-display); }
+
+/* ---------- Layout ---------- */
+.app-shell { display: flex; min-height: 100vh; }
+
+.sidebar {
+  width: 232px;
+  flex-shrink: 0;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  padding: 20px 14px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px 22px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 14px;
+}
+
+.sidebar-brand .dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--signal-cyan);
+  box-shadow: 0 0 10px var(--signal-cyan);
+}
+
+.sidebar-brand-text { font-family: var(--font-display); font-weight: 700; font-size: 14.5px; line-height: 1.15; }
+.sidebar-brand-text span { display: block; color: var(--text-mid); font-family: var(--font-mono); font-size: 10px; font-weight: 400; letter-spacing: 0.08em; margin-top: 2px; }
+
+.nav-link {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px; border-radius: 6px;
+  color: var(--text-mid); font-size: 13.5px; font-weight: 500;
+  margin-bottom: 2px; cursor: pointer;
+  border-left: 2px solid transparent;
+}
+.nav-link:hover { background: var(--bg-raised); color: var(--text-hi); }
+.nav-link.active { background: var(--bg-raised); color: var(--text-hi); border-left-color: var(--signal-cyan); }
+.nav-link svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+.sidebar-footer { margin-top: auto; padding-top: 14px; border-top: 1px solid var(--line); }
+
+.main-area { flex: 1; min-width: 0; }
+
+.topbar {
+  height: 58px; border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 24px; background: rgba(14, 21, 36, 0.7); backdrop-filter: blur(6px);
+  position: sticky; top: 0; z-index: 10;
+}
+
+.topbar-title { font-family: var(--font-display); font-weight: 600; font-size: 15px; }
+.topbar-sub { color: var(--text-low); font-size: 11.5px; font-family: var(--font-mono); margin-top: 2px; }
+
+.page-content { padding: 24px; max-width: 1400px; }
+
+/* ---------- Cards ---------- */
+.card {
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 18px;
+}
+
+.stat-card { display: flex; flex-direction: column; gap: 8px; }
+.stat-card .label { color: var(--text-mid); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 500; }
+.stat-card .value { font-family: var(--font-mono); font-size: 28px; font-weight: 600; }
+.stat-card .delta { font-size: 11.5px; font-family: var(--font-mono); }
+
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin-bottom: 20px; }
+
+/* ---------- Badges ---------- */
+.badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 9px; border-radius: 999px;
+  font-size: 11px; font-weight: 600; font-family: var(--font-mono);
+  letter-spacing: 0.03em; text-transform: uppercase;
+}
+.badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.badge-low { color: var(--sev-low); background: rgba(51, 230, 201, 0.1); }
+.badge-medium { color: var(--sev-medium); background: rgba(242, 193, 78, 0.12); }
+.badge-high { color: var(--sev-high); background: rgba(242, 136, 75, 0.12); }
+.badge-critical { color: var(--sev-critical); background: rgba(255, 77, 109, 0.14); }
+
+/* ---------- Table ---------- */
+.data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.data-table th {
+  text-align: left; color: var(--text-mid); font-weight: 500; font-size: 11px;
+  text-transform: uppercase; letter-spacing: 0.05em; padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.data-table td { padding: 11px 12px; border-bottom: 1px solid var(--line); color: var(--text-hi); }
+.data-table tr:hover td { background: var(--bg-raised); }
+.data-table .mono-cell { font-family: var(--font-mono); font-size: 12.5px; color: var(--text-mid); }
+
+/* ---------- Buttons ---------- */
+.btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 9px 16px; border-radius: 7px; border: 1px solid var(--line);
+  background: var(--bg-raised); color: var(--text-hi);
+  font-size: 13px; font-weight: 500; cursor: pointer;
+}
+.btn:hover { border-color: var(--signal-cyan); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-danger { border-color: rgba(255, 77, 109, 0.4); color: var(--sev-critical); }
+.btn-danger:hover { border-color: var(--sev-critical); background: rgba(255, 77, 109, 0.08); }
+.btn-primary { background: var(--signal-cyan); color: #04211c; border-color: var(--signal-cyan); font-weight: 600; }
+.btn-primary:hover { filter: brightness(1.08); }
+
+/* ---------- Forms ---------- */
+.input {
+  width: 100%; background: var(--bg-void); border: 1px solid var(--line);
+  border-radius: 7px; padding: 10px 12px; color: var(--text-hi); font-size: 13.5px;
+}
+.input:focus { outline: none; border-color: var(--signal-cyan); }
+.label-sm { font-size: 12px; color: var(--text-mid); margin-bottom: 6px; display: block; }
+
+/* ---------- Misc ---------- */
+.section-title { font-family: var(--font-display); font-weight: 600; font-size: 15px; margin: 0 0 14px; }
+.divider { height: 1px; background: var(--line); border: none; margin: 18px 0; }
+.pulse-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--sev-critical); animation: pulse 1.6s infinite; }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255,77,109,0.6); } 70% { box-shadow: 0 0 0 8px rgba(255,77,109,0); } 100% { box-shadow: 0 0 0 0 rgba(255,77,109,0); } }
+
+.toast-alert {
+  position: fixed; top: 20px; right: 20px; z-index: 100;
+  background: var(--bg-raised); border: 1px solid var(--sev-critical);
+  border-radius: 10px; padding: 14px 16px; width: 320px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+  animation: slideIn 0.25s ease-out;
+}
+@keyframes slideIn { from { transform: translateX(30px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+.grid-2 { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+
+@media (max-width: 900px) {
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  .sidebar { position: fixed; left: -240px; transition: left 0.2s; z-index: 50; }
+  .sidebar.open { left: 0; }
+}
