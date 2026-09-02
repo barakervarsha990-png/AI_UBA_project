@@ -2,64 +2,107 @@ const nodemailer = require('nodemailer');
 
 let transporter = null;
 
+const readEnv = (key) => {
+  const val = process.env[key];
+  if (val === undefined || val === null) return undefined;
+  return val.trim().replace(/^["']|["']$/g, '');
+};
+
 const getTransporter = () => {
   if (transporter) return transporter;
 
-  if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
-    console.warn('[EMAIL] SMTP credentials not fully configured. Emails will be logged, not sent.');
+  const user = readEnv('SMTP_USER');
+  const pass = readEnv('SMTP_PASS');
+
+  console.log('[EMAIL] SMTP configuration check:');
+  console.log('[EMAIL] USER:', user || '(missing)');
+  console.log('[EMAIL] PASS:', pass ? 'LOADED' : '(missing)');
+  console.log('[EMAIL] TO:', readEnv('ALERT_EMAIL_TO') || '(missing)');
+
+  if (!user || !pass) {
+    console.warn('[EMAIL] SMTP credentials missing.');
     return null;
   }
 
   transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT) || 587,
-    secure: process.env.SMTP_SECURE === 'true',
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false,
+
     auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
+      user: user,
+      pass: pass,
+    },
+
+    tls: {
+      rejectUnauthorized: false,
+      servername: 'smtp.gmail.com',
     },
   });
 
   return transporter;
 };
 
-const buildAlertHtml = (alert) => `
-  <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; border:1px solid #333; border-radius:8px; overflow:hidden;">
-    <div style="background:#0b1220; color:#fff; padding:16px 20px;">
-      <h2 style="margin:0; font-size:18px;">🚨 SOC Alert: ${alert.severity} Severity</h2>
-    </div>
-    <div style="padding:20px; color:#111;">
-      <p><strong>Alert Type:</strong> ${alert.type === 'account_takeover' ? 'Possible Account Takeover' : 'Possible Insider Threat'}</p>
-      <p><strong>User:</strong> ${alert.username}</p>
-      <p><strong>Risk Score:</strong> ${alert.riskScore}/100</p>
-      <p><strong>Time:</strong> ${alert.time || ''}</p>
-      <p><strong>IP Address:</strong> ${alert.ipAddress || 'N/A'}</p>
-      <p><strong>Location:</strong> ${alert.location || 'N/A'}</p>
-      <p><strong>Device:</strong> ${alert.device || 'N/A'}</p>
-      <p><strong>Reasons:</strong></p>
-      <ul>${(alert.reasons || []).map((r) => `<li>${r}</li>`).join('')}</ul>
-      <p style="margin-top:20px; font-size:12px; color:#666;">This is an automated alert from the AI-Driven User Behaviour Analytics platform. Please review in the SOC dashboard.</p>
-    </div>
-  </div>
+const buildEmailText = (alert) => `
+🚨 UBA SECURITY ALERT
+
+Severity: ${alert.severity}
+Type: ${alert.type}
+User: ${alert.username}
+Risk Score: ${alert.riskScore}/100
+Time: ${alert.time || 'N/A'}
+IP Address: ${alert.ipAddress || 'N/A'}
+Location: ${alert.location || 'N/A'}
+Device: ${alert.device || 'N/A'}
+
+Please check the UBA dashboard immediately.
 `;
 
 const sendAlertEmail = async (alert) => {
-  const to = process.env.ALERT_EMAIL_TO;
-  const from = process.env.ALERT_EMAIL_FROM || process.env.SMTP_USER;
-  const subject = `[${alert.severity}] ${alert.type === 'account_takeover' ? 'Account Takeover' : 'Insider Threat'} Alert - ${alert.username}`;
+  const to = readEnv('ALERT_EMAIL_TO');
+  const from = readEnv('ALERT_EMAIL_FROM') || readEnv('SMTP_USER');
+
+  if (!to) {
+    const msg = 'ALERT_EMAIL_TO is missing from .env — no recipient to send to.';
+    console.error('[EMAIL]', msg);
+    return { sent: false, error: msg };
+  }
+
+  const subject = `[${alert.severity}] ${alert.type === 'account_takeover' ? 'Account Takeover' : 'Insider Threat'} Alert`;
 
   const t = getTransporter();
   if (!t) {
-    console.log('[EMAIL:SIMULATED]', { to, subject });
-    return { sent: false, simulated: true };
+    return { sent: false, error: 'SMTP not configured (SMTP_USER / SMTP_PASS missing).' };
   }
 
   try {
-    await t.sendMail({ from, to, subject, html: buildAlertHtml(alert) });
-    return { sent: true, simulated: false };
-  } catch (err) {
-    console.error('[EMAIL] Failed to send alert email:', err.message);
-    return { sent: false, error: err.message };
+    await t.verify();
+    console.log('[EMAIL] SMTP connection verified successfully.');
+
+    const info = await t.sendMail({ from, to, subject, text: buildEmailText(alert) });
+
+    console.log('[EMAIL] Email sent successfully!');
+    console.log('[EMAIL] Message ID:', info.messageId);
+    return { sent: true, messageId: info.messageId };
+  } catch (error) {
+    console.error('[EMAIL] Failed to send email.');
+    console.error('[EMAIL] Error code:', error.code);
+    console.error('[EMAIL] Error message:', error.message);
+
+    if (error.code === 'EAUTH') {
+      console.error(
+        '[EMAIL] HINT: This is an authentication failure. Almost always means SMTP_PASS ' +
+        'is your regular Gmail password instead of an App Password, or 2-Step Verification ' +
+        'is not enabled on the account. Fix: https://myaccount.google.com/apppasswords'
+      );
+    } else if (error.code === 'ETIMEDOUT' || error.code === 'ECONNECTION') {
+      console.error(
+        '[EMAIL] HINT: Could not reach smtp.gmail.com. Your network (college wifi, ' +
+        'firewall, antivirus) may be blocking outbound port 465/587.'
+      );
+    }
+
+    return { sent: false, error: error.message };
   }
 };
 

@@ -29,6 +29,7 @@ const TITLES = ['Software Engineer', 'Financial Analyst', 'HR Executive', 'Sales
 const TEST_USERS = [
   { fullName: 'Varsha Baraker', email: 'barakervarsha990@gmail.com' },
   { fullName: 'Vikas N S', email: 'nsvikas19@gmail.com' },
+  { fullName: 'Shradha', email: 'shradhashirender@gmail.com'},
 ];
 
 const NORMAL_FILES = [
@@ -129,7 +130,7 @@ for (const cfg of userConfigs) {
   });
   employees.push(user);
 }
-console.log(`[SEED] Created ${employees.length} employee users`);
+console.log(`[SEED] Created ${employees.length} employee users`);s
 
   // Two employees will be designated as the "suspicious" demo subjects
   const atoTarget = employees[0]; // account takeover demo subject
