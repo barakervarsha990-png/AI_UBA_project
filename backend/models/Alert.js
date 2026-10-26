@@ -16,10 +16,6 @@ const AlertSchema = new mongoose.Schema(
     reasons: [{ type: String }],
     status: { type: String, enum: ['open', 'acknowledged', 'resolved'], default: 'open' },
     emailSent: { type: Boolean, default: false },
-    smsSent: { type: Boolean, default: false },
-    emailError: { type: String, default: null },
-    smsError: { type: String, default: null },
-    notificationTimestamp: { type: Date, default: null },
   },
   { timestamps: true }
 );

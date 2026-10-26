@@ -7,32 +7,23 @@ Exposes:
   POST /score/file    - score a file-access event against a user's baseline
 
 Run with: uvicorn main:app --reload --port 8001
-
-NOTE ON ROBUSTNESS: these endpoints deliberately accept a raw JSON body
-(dict) instead of a strict Pydantic schema. Threat-detection scoring must
-never hard-fail with a 422 just because the caller's payload is missing an
-optional field or uses a slightly different shape than expected — a bad
-request should degrade gracefully to a safe default score, not break the
-pipeline. Every field is read defensively with .get()/fallbacks below.
 """
 
-import logging
-from typing import Any, Dict, Optional
+from typing import List, Optional
 
-from fastapi import FastAPI, Body
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 from model import score_login_event, score_file_event
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("ml-service")
 
 app = FastAPI(
     title="Insider Threat & Account Takeover Detection - ML Service",
     description="Isolation Forest based anomaly scoring for login and file-access behaviour.",
-    version="1.0.1",
+    version="1.0.0",
 )
 
+# Allow the Node backend to call this service. Restrict origins in production.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -41,74 +32,53 @@ app.add_middleware(
 )
 
 
-def _safe_str(value: Any, default: str) -> str:
-    return value if isinstance(value, str) and value.strip() else default
+class LoginEventPayload(BaseModel):
+    username: Optional[str] = None
+    date: Optional[str] = None
+    time: str
+    country: str
+    state: Optional[str] = None
+    city: Optional[str] = None
+    ipAddress: str
+    device: str
+    loginStatus: str = "success"
 
 
-def _safe_number(value: Any, default: float) -> float:
-    try:
-        if value is None:
-            return default
-        return float(value)
-    except (TypeError, ValueError):
-        return default
+class BaselinePayload(BaseModel):
+    normalCountries: List[str] = []
+    normalDevices: List[str] = []
+    normalIpAddresses: List[str] = []
+    typicalLoginHourStart: int = 9
+    typicalLoginHourEnd: int = 19
 
 
-def _extract_login_event(body: Dict[str, Any]) -> Dict[str, Any]:
-    event = body.get("event") or {}
-    return {
-        "username": event.get("username"),
-        "date": event.get("date"),
-        "time": _safe_str(event.get("time"), "12:00:00"),
-        "country": _safe_str(event.get("country"), "Unknown"),
-        "state": event.get("state"),
-        "city": event.get("city"),
-        "ipAddress": _safe_str(event.get("ipAddress"), "0.0.0.0"),
-        "device": _safe_str(event.get("device"), "Unknown Device"),
-        "loginStatus": _safe_str(event.get("loginStatus"), "success"),
-    }
+class ScoreLoginRequest(BaseModel):
+    event: LoginEventPayload
+    baseline: Optional[BaselinePayload] = None
 
 
-def _extract_login_baseline(body: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    baseline = body.get("baseline")
-    if not baseline:
-        return None
-    return {
-        "normalCountries": baseline.get("normalCountries") or [],
-        "normalDevices": baseline.get("normalDevices") or [],
-        "normalIpAddresses": baseline.get("normalIpAddresses") or [],
-        "typicalLoginHourStart": int(_safe_number(baseline.get("typicalLoginHourStart"), 9)),
-        "typicalLoginHourEnd": int(_safe_number(baseline.get("typicalLoginHourEnd"), 19)),
-    }
+class FileEventPayload(BaseModel):
+    fileName: str
+    fileType: Optional[str] = None
+    sensitivityLevel: str = "internal"
+    action: str = "view"
 
 
-def _extract_file_event(body: Dict[str, Any]) -> Dict[str, Any]:
-    event = body.get("event") or {}
-    return {
-        "fileName": _safe_str(event.get("fileName"), "unknown_file"),
-        "fileType": event.get("fileType"),
-        "sensitivityLevel": _safe_str(event.get("sensitivityLevel"), "internal"),
-        "action": _safe_str(event.get("action"), "view"),
-    }
+class FileBaselinePayload(BaseModel):
+    avgFilesAccessedPerDay: float = 3
+    maxFilesAccessedPerDay: float = 6
+    avgConfidentialFilesPerDay: float = 1
 
 
-def _extract_file_baseline(body: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    baseline = body.get("baseline")
-    if not baseline:
-        return None
-    return {
-        "avgFilesAccessedPerDay": _safe_number(baseline.get("avgFilesAccessedPerDay"), 3),
-        "maxFilesAccessedPerDay": _safe_number(baseline.get("maxFilesAccessedPerDay"), 6),
-        "avgConfidentialFilesPerDay": _safe_number(baseline.get("avgConfidentialFilesPerDay"), 1),
-    }
+class TodayStatsPayload(BaseModel):
+    totalFilesToday: int = 1
+    confidentialFilesToday: int = 0
 
 
-def _extract_today_stats(body: Dict[str, Any]) -> Dict[str, Any]:
-    stats = body.get("todayStats") or {}
-    return {
-        "totalFilesToday": int(_safe_number(stats.get("totalFilesToday"), 1)),
-        "confidentialFilesToday": int(_safe_number(stats.get("confidentialFilesToday"), 0)),
-    }
+class ScoreFileRequest(BaseModel):
+    event: FileEventPayload
+    baseline: Optional[FileBaselinePayload] = None
+    todayStats: Optional[TodayStatsPayload] = None
 
 
 @app.get("/health")
@@ -117,33 +87,15 @@ def health():
 
 
 @app.post("/score/login")
-def score_login(body: Dict[str, Any] = Body(...)):
-    try:
-        event = _extract_login_event(body)
-        baseline = _extract_login_baseline(body)
-        return score_login_event(event, baseline)
-    except Exception as exc:
-        logger.exception("[/score/login] Unexpected error, returning safe fallback. Raw body: %s", body)
-        return {
-            "riskScore": 0,
-            "riskLevel": "LOW",
-            "isSuspicious": False,
-            "reasons": [f"Scoring error (fell back to LOW): {exc}"],
-        }
+def score_login(payload: ScoreLoginRequest):
+    baseline_dict = payload.baseline.model_dump() if payload.baseline else None
+    result = score_login_event(payload.event.model_dump(), baseline_dict)
+    return result
 
 
 @app.post("/score/file")
-def score_file(body: Dict[str, Any] = Body(...)):
-    try:
-        event = _extract_file_event(body)
-        baseline = _extract_file_baseline(body)
-        today_stats = _extract_today_stats(body)
-        return score_file_event(event, baseline, today_stats)
-    except Exception as exc:
-        logger.exception("[/score/file] Unexpected error, returning safe fallback. Raw body: %s", body)
-        return {
-            "riskScore": 0,
-            "riskLevel": "LOW",
-            "isSuspicious": False,
-            "reasons": [f"Scoring error (fell back to LOW): {exc}"],
-        }
+def score_file(payload: ScoreFileRequest):
+    baseline_dict = payload.baseline.model_dump() if payload.baseline else None
+    today_stats_dict = payload.todayStats.model_dump() if payload.todayStats else None
+    result = score_file_event(payload.event.model_dump(), baseline_dict, today_stats_dict)
+    return result

@@ -17,7 +17,7 @@ import SettingsPage from './pages/SettingsPage';
 import { useAuth } from './context/AuthContext';
 
 const pageTitles = {
-'/': ['Dashboard', 'MY CUSTOM SOC CONSOLE'],
+  '/': ['Dashboard', 'REAL-TIME BEHAVIOUR OVERVIEW'],
   '/users': ['Users', 'MONITORED EMPLOYEE ACCOUNTS'],
   '/login-activity': ['Login Activity', 'AUTHENTICATION TELEMETRY'],
   '/file-activity': ['File Activity', 'CONFIDENTIAL DATA ACCESS LOG'],

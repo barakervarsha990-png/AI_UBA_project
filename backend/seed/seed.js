@@ -25,13 +25,6 @@ const { LOCATIONS, DEVICES, HOME_LOCATION, HOME_DEVICE, randomFrom, randomIpFrom
 const DEPARTMENTS = ['Engineering', 'Finance', 'HR', 'Sales', 'IT Operations', 'Legal'];
 const TITLES = ['Software Engineer', 'Financial Analyst', 'HR Executive', 'Sales Manager', 'System Administrator', 'Legal Counsel'];
 
-
-const TEST_USERS = [
-  { fullName: 'Varsha Baraker', email: 'barakervarsha990@gmail.com' },
-  { fullName: 'Vikas N S', email: 'nsvikas19@gmail.com' },
-  { fullName: 'Shradha', email: 'shradhashirender@gmail.com'},
-];
-
 const NORMAL_FILES = [
   { fileName: 'weekly_status_report.docx', fileType: 'docx', sensitivityLevel: 'internal' },
   { fileName: 'project_plan.xlsx', fileType: 'xlsx', sensitivityLevel: 'internal' },
@@ -88,49 +81,28 @@ const run = async () => {
   console.log(`[SEED] Created admin user: ${admin.username} (password from .env, not logged)`);
 
   // ---------- 10 employee users ----------
- const fallbackFirstNames = ['Ananya', 'Rohit', 'Priya', 'Karthik', 'Sneha', 'Arjun', 'Divya', 'Vikram', 'Meera', 'Rahul'];
-const fallbackLastNames = ['Sharma', 'Patel', 'Reddy', 'Nair', 'Iyer', 'Gupta', 'Rao', 'Menon', 'Singh', 'Kumar'];
+  const firstNames = ['Ananya', 'Rohit', 'Priya', 'Karthik', 'Sneha', 'Arjun', 'Divya', 'Vikram', 'Meera', 'Rahul'];
+  const lastNames = ['Sharma', 'Patel', 'Reddy', 'Nair', 'Iyer', 'Gupta', 'Rao', 'Menon', 'Singh', 'Kumar'];
 
-const userConfigs = TEST_USERS.length > 0
-  ? TEST_USERS.map((u, i) => ({
-      fullName: u.fullName,
-      email: u.email,
-      employeeId: u.employeeId || `EMP-${1000 + i}`,
-      department: u.department || DEPARTMENTS[i % DEPARTMENTS.length],
-      jobTitle: u.jobTitle || TITLES[i % TITLES.length],
-    }))
-  : fallbackFirstNames.map((first, i) => ({
-      fullName: `${first} ${fallbackLastNames[i]}`,
-      email: `${first.toLowerCase()}.${fallbackLastNames[i].toLowerCase()}@company.com`,
+  const employees = [];
+  for (let i = 0; i < 10; i++) {
+    const fullName = `${firstNames[i]} ${lastNames[i]}`;
+    const username = `${firstNames[i].toLowerCase()}.${lastNames[i].toLowerCase()}`;
+    const deptIdx = i % DEPARTMENTS.length;
+    const user = await User.create({
       employeeId: `EMP-${1000 + i}`,
-      department: DEPARTMENTS[i % DEPARTMENTS.length],
-      jobTitle: TITLES[i % TITLES.length],
-    }));
-
-if (TEST_USERS.length > 0) {
-  console.log(`[SEED] Using ${TEST_USERS.length} real test user(s) from TEST_USERS array`);
-} else {
-  console.log('[SEED] TEST_USERS array is empty — using synthetic demo employees instead.');
-}
-
-const employees = [];
-for (const cfg of userConfigs) {
-  const localPart = cfg.email.split('@')[0].toLowerCase();
-  const username = localPart.replace(/[^a-z0-9._-]/g, '');
-  const user = await User.create({
-    employeeId: cfg.employeeId,
-    username,
-    fullName: cfg.fullName,
-    email: cfg.email,
-    password: 'EmployeeDemo123!',
-    department: cfg.department,
-    role: 'employee',
-    jobTitle: cfg.jobTitle,
-    status: 'active',
-  });
-  employees.push(user);
-}
-console.log(`[SEED] Created ${employees.length} employee users`);s
+      username,
+      fullName,
+      email: `${username}@company.com`,
+      password: 'EmployeeDemo123!', // demo only; employees don't log into this dashboard
+      department: DEPARTMENTS[deptIdx],
+      role: 'employee',
+      jobTitle: TITLES[deptIdx],
+      status: 'active',
+    });
+    employees.push(user);
+  }
+  console.log(`[SEED] Created ${employees.length} employee users`);
 
   // Two employees will be designated as the "suspicious" demo subjects
   const atoTarget = employees[0]; // account takeover demo subject
