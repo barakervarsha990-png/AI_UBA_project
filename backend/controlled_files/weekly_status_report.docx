@@ -1,0 +1,15 @@
+SENTINEL SOC OPERATIONS - WEEKLY STATUS REPORT
+==================================================
+Reporting Period: Current Sprint
+Author: SOC Engineering Team
+Status: On Track
+
+Key Highlights:
+1. Deployed real-time event-driven UBA telemetry collector.
+2. Verified Dual-Model ML pipeline: Isolation Forest anomaly scorer + Random Forest classifier.
+3. Live WebSocket streaming to SOC Console active.
+4. Account Takeover (ATO) and Insider Threat burst alerting enabled.
+
+Upcoming Deliverables:
+- Continued continuous behavioral profiling.
+- Automated quarterly baseline recalculation.

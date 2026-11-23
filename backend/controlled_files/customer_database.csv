@@ -1,0 +1,7 @@
+customer_id,company_name,primary_contact,contact_email,contract_value_usd,tier
+CUST-5001,Acme FinTech Global,John Miller,j.miller@acmefin.com,450000,Enterprise
+CUST-5002,Nordic Healthcare Group,Astrid Lind,astrid@nordichealth.se,280000,Premium
+CUST-5003,Apex Logistics Inc,Carlos Gomez,cgomez@apexlog.com,190000,Standard
+CUST-5004,Zenith Cyber Systems,Deepa Krishnan,dkrishnan@zenithsys.in,520000,Enterprise
+CUST-5005,Skyline Retail Partners,Thomas Wright,twright@skylineretail.co.uk,310000,Premium
+# [CONFIDENTIAL CLIENT DATA] - Synthetic demonstration records for Sentinel Behaviour Analytics testing.

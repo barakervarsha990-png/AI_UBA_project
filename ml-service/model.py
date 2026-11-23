@@ -1,24 +1,49 @@
 """
-Anomaly-detection scoring engine for the Insider Threat / Account Takeover
-detection platform.
+Anomaly-detection and threat-scoring engine for the Sentinel UBA Platform.
 
-For each incoming event, we build a small numeric feature vector describing
-how much the event deviates from the user's behavioural baseline, fit a
-lightweight Isolation Forest on a synthetic "normal behaviour" distribution
-generated from that baseline, and score the real event against it. The
-Isolation Forest anomaly score is then blended with explicit rule-based
-signals (which double as the human-readable "reasons") to produce a final
-0-100 risk score.
-
-This keeps the demo self-contained (no need to persist large historical
-feature matrices per user) while still using genuine unsupervised anomaly
-detection rather than pure if/else rules.
+Features dual-model architecture:
+1. Isolation Forest: unsupervised anomaly scoring based on deviation from historical baseline.
+2. Random Forest: supervised classification trained on normal vs suspicious attack patterns
+   (brute force, credential spray, account takeover sequence, off-hours foreign login).
+3. Rule-based explainability: generates human-readable detection reasons.
+4. Safe fallback: maintains operation even if models are uninitialized.
 """
 
+from datetime import datetime, timezone
+import json
+import logging
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+import joblib
 import numpy as np
-from sklearn.ensemble import IsolationForest
 
-RNG = np.random.default_rng(42)
+logger = logging.getLogger("sentinel.model")
+MODELS_DIR = Path(__file__).resolve().parent / "models"
+
+# SENSITIVITY AND ACTION WEIGHTS
+SENSITIVITY_WEIGHT = {"public": 0.0, "internal": 0.2, "confidential": 0.6, "restricted": 1.0}
+ACTION_WEIGHT = {"view": 0.1, "modify": 0.4, "copy": 0.6, "download": 0.7, "delete": 1.0}
+
+LOGIN_FEATURE_NAMES = [
+    "hour_of_day",
+    "hour_dev",
+    "is_new_country",
+    "is_new_device",
+    "is_new_ip",
+    "failed_attempts_in_window",
+    "is_after_failures",
+    "is_failed",
+]
+
+FILE_FEATURE_NAMES = [
+    "sensitivity_weight",
+    "action_weight",
+    "volume_ratio",
+    "confidential_ratio",
+]
+
+# Global cache of loaded models
+_MODELS: Dict[str, Any] = {}
 
 
 def _risk_level(score: int) -> str:
@@ -31,34 +56,82 @@ def _risk_level(score: int) -> str:
     return "LOW"
 
 
-def _fit_and_score(normal_samples: np.ndarray, sample: np.ndarray) -> float:
-    """Fits an IsolationForest on synthetic normal samples and returns an
-    anomaly score in [0, 1] for `sample` (1 = highly anomalous)."""
-    clf = IsolationForest(n_estimators=100, contamination=0.12, random_state=42)
-    clf.fit(normal_samples)
+def load_models() -> Dict[str, Any]:
+    """Loads saved Isolation Forest and Random Forest models from disk."""
+    global _MODELS
+    if _MODELS.get("loaded"):
+        return _MODELS
 
-    # decision_function: higher = more normal, lower/negative = more anomalous.
-    raw = clf.decision_function(sample.reshape(1, -1))[0]
+    models = {}
+    try:
+        login_iso_path = MODELS_DIR / "login_isolation_forest.joblib"
+        login_rf_path = MODELS_DIR / "login_random_forest.joblib"
+        file_iso_path = MODELS_DIR / "file_isolation_forest.joblib"
+        file_rf_path = MODELS_DIR / "file_random_forest.joblib"
 
-    # Normalize roughly into [0, 1] anomaly score using a logistic squashing
-    # centered around 0 (empirically decision_function values sit in ~[-0.3, 0.3]).
-    anomaly = 1 / (1 + np.exp(raw * 8))
-    return float(np.clip(anomaly, 0.0, 1.0))
+        if not (login_iso_path.exists() and login_rf_path.exists()):
+            logger.info("Saved models not found on disk. Initiating training...")
+            from train_models import train_and_save_models
+            train_and_save_models()
+
+        models["login_iso"] = joblib.load(login_iso_path)
+        models["login_rf"] = joblib.load(login_rf_path)
+        models["file_iso"] = joblib.load(file_iso_path)
+        models["file_rf"] = joblib.load(file_rf_path)
+
+        meta_path = MODELS_DIR / "model_metadata.json"
+        if meta_path.exists():
+            with open(meta_path, "r") as f:
+                models["metadata"] = json.load(f)
+        else:
+            models["metadata"] = {"version": "2.0.0"}
+
+        models["loaded"] = True
+        logger.info("Successfully loaded all ML models into memory.")
+    except Exception as exc:
+        logger.warning("Could not load ML models, will fallback gracefully: %s", exc)
+        models["loaded"] = False
+
+    _MODELS = models
+    return _MODELS
+
+
+def get_model_status() -> Dict[str, Any]:
+    models = load_models()
+    meta = models.get("metadata", {})
+    return {
+        "status": "ready" if models.get("loaded") else "fallback_mode",
+        "version": meta.get("version", "2.0.0"),
+        "modelsLoaded": {
+            "loginIsolationForest": "login_iso" in models,
+            "loginRandomForest": "login_rf" in models,
+            "fileIsolationForest": "file_iso" in models,
+            "fileRandomForest": "file_rf" in models,
+        },
+        "loginFeatures": LOGIN_FEATURE_NAMES,
+        "fileFeatures": FILE_FEATURE_NAMES,
+        "metrics": meta.get("metrics", {}),
+        "limitations": meta.get("limitations", []),
+    }
 
 
 # ---------------------------------------------------------------------------
-# LOGIN SCORING
+# LOGIN SCORING PIPELINE
 # ---------------------------------------------------------------------------
 
-def score_login_event(event: dict, baseline: dict | None) -> dict:
+def extract_login_features(event: dict, baseline: Optional[dict]) -> Tuple[np.ndarray, dict, List[str], int]:
+    """
+    Extracts standardized numerical features and rule indicators for a login event.
+    NEVER uses submitted password as a feature.
+    """
     reasons = []
     rule_score = 0
 
-    country = event.get("country")
-    device = event.get("device")
-    ip_address = event.get("ipAddress")
-    time_str = event.get("time", "00:00:00")
-    login_status = event.get("loginStatus", "success")
+    country = str(event.get("country") or "Unknown")
+    device = str(event.get("device") or "Unknown Device")
+    ip_address = str(event.get("ipAddress") or "0.0.0.0")
+    time_str = str(event.get("time") or "12:00:00")
+    login_status = str(event.get("loginStatus") or "success").lower()
 
     try:
         hour = int(time_str.split(":")[0])
@@ -71,127 +144,218 @@ def score_login_event(event: dict, baseline: dict | None) -> dict:
     hour_start = (baseline or {}).get("typicalLoginHourStart", 9)
     hour_end = (baseline or {}).get("typicalLoginHourEnd", 19)
 
-    country_anomaly = 0 if country in normal_countries or not normal_countries else 1
-    device_anomaly = 0 if device in normal_devices or not normal_devices else 1
-    ip_anomaly = 0 if ip_address in normal_ips or not normal_ips else 1
+    # Calculate deviations
+    is_new_country = 1.0 if (normal_countries and country not in normal_countries) else 0.0
+    is_new_device = 1.0 if (normal_devices and device not in normal_devices) else 0.0
+    is_new_ip = 1.0 if (normal_ips and ip_address not in normal_ips) else 0.0
 
     if hour < hour_start or hour > hour_end:
-        # distance in hours outside the normal window, capped
-        hour_dev = min(6, min(abs(hour - hour_start), abs(hour - hour_end)))
+        hour_dev = float(min(6, min(abs(hour - hour_start), abs(hour - hour_end))))
     else:
-        hour_dev = 0
+        hour_dev = 0.0
 
-    failed_flag = 1 if login_status == "failed" else 0
+    failed_attempts_in_window = float(event.get("failedAttemptsInWindow", 0) or 0)
+    is_after_failures = 1.0 if event.get("isAfterFailures") else 0.0
+    is_failed = 1.0 if login_status == "failed" else 0.0
 
-    if country_anomaly:
-        rule_score += 40
+    # Rule-based signal assessment
+    if is_new_country:
+        rule_score += 35
         reasons.append(f"Login from new/unrecognized country: {country}")
-    if device_anomaly:
+    if is_new_device:
         rule_score += 20
         reasons.append(f"Login from unrecognized device: {device}")
-    if ip_anomaly:
+    if is_new_ip:
         rule_score += 15
-        reasons.append(f"Login from new/unrecognized IP address: {ip_address}")
+        reasons.append(f"Login from new IP address: {ip_address}")
     if hour_dev > 0:
-        rule_score += min(20, hour_dev * 4)
-        reasons.append(f"Login at unusual hour: {time_str}")
-    if failed_flag:
-        rule_score += 10
-        reasons.append("Failed login attempt")
+        rule_score += int(min(20, hour_dev * 4))
+        reasons.append(f"Login at unusual hour ({time_str}, normal window {hour_start:02d}:00–{hour_end:02d}:00)")
 
-    # ---- Isolation Forest component ----
-    # Synthetic "normal" distribution: mostly zeros/no-deviation with small noise.
-    normal_samples = np.column_stack([
-        RNG.integers(0, 1, size=200, endpoint=False),  # country_anomaly ~ 0
-        RNG.integers(0, 1, size=200, endpoint=False),  # device_anomaly ~ 0
-        RNG.integers(0, 1, size=200, endpoint=False),  # ip_anomaly ~ 0
-        RNG.normal(0, 1, size=200).clip(0, 6),          # hour_dev ~ small
-        RNG.integers(0, 1, size=200, endpoint=False),  # failed_flag ~ 0
-    ]).astype(float)
+    if is_failed:
+        rule_score += 15
+        reasons.append("Authentication failure")
 
-    sample = np.array([country_anomaly, device_anomaly, ip_anomaly, hour_dev, failed_flag], dtype=float)
-    anomaly_fraction = _fit_and_score(normal_samples, sample)
+    if failed_attempts_in_window >= 3:
+        rule_score += min(35, int(failed_attempts_in_window * 7))
+        reasons.append(f"Rapid failed authentication burst ({int(failed_attempts_in_window)} attempts in 5m window)")
 
-    ml_score = anomaly_fraction * 100
-    final_score = int(round(min(100, max(rule_score, 0.6 * rule_score + 0.4 * ml_score))))
+    # Key Account Takeover (ATO) signature: success right after repeated failures
+    if is_after_failures and not is_failed:
+        rule_score += 45
+        reasons.append("Account Takeover (ATO) indicator: successful login immediately following multiple failed attempts")
+
+    # If user has no baseline yet
+    if not normal_devices and not normal_ips:
+        reasons.append("Initial baseline creation in progress for new user")
+
+    features_dict = {
+        "hour_of_day": round(float(hour), 2),
+        "hour_dev": round(hour_dev, 2),
+        "is_new_country": is_new_country,
+        "is_new_device": is_new_device,
+        "is_new_ip": is_new_ip,
+        "failed_attempts_in_window": failed_attempts_in_window,
+        "is_after_failures": is_after_failures,
+        "is_failed": is_failed,
+    }
+
+    feature_vector = np.array([
+        float(hour),
+        hour_dev,
+        is_new_country,
+        is_new_device,
+        is_new_ip,
+        failed_attempts_in_window,
+        is_after_failures,
+        is_failed,
+    ], dtype=float)
+
+    return feature_vector, features_dict, reasons, rule_score
+
+
+def score_login_event(event: dict, baseline: Optional[dict]) -> dict:
+    """
+    Evaluates a login event using the Dual ML Ensemble (Isolation Forest + Random Forest)
+    blended with rule-based heuristics.
+    """
+    models = load_models()
+    feature_vector, features_dict, reasons, rule_score = extract_login_features(event, baseline)
+
+    iso_score = 0.0
+    rf_score = 0.0
+    model_name = "Rule-based Baseline Scorer"
+
+    if models.get("loaded") and "login_iso" in models and "login_rf" in models:
+        try:
+            vec_2d = feature_vector.reshape(1, -1)
+            raw_decision = models["login_iso"].decision_function(vec_2d)[0]
+            # Logistic squashing of decision_function into [0, 1]
+            iso_score = float(np.clip(1 / (1 + np.exp(raw_decision * 8)), 0.0, 1.0))
+
+            # Random Forest classification probability for class 1 (suspicious)
+            rf_prob = models["login_rf"].predict_proba(vec_2d)[0]
+            rf_score = float(rf_prob[1]) if len(rf_prob) > 1 else float(rf_prob[0])
+
+            model_name = "IsolationForest + RandomForest (Ensemble)"
+        except Exception as exc:
+            logger.warning("Error running ML models for login scoring: %s", exc)
+
+    # Blended scoring
+    if model_name.startswith("IsolationForest"):
+        ml_score = 0.5 * (iso_score * 100) + 0.5 * (rf_score * 100)
+        final_score = int(round(min(100, max(rule_score, 0.4 * rule_score + 0.6 * ml_score))))
+    else:
+        final_score = min(100, rule_score)
 
     risk_level = _risk_level(final_score)
+    is_suspicious = final_score >= 50
+
     return {
         "riskScore": final_score,
         "riskLevel": risk_level,
-        "isSuspicious": final_score >= 50,
-        "reasons": reasons if reasons else ["No significant deviation from baseline behaviour"],
-        "mlAnomalyFraction": round(anomaly_fraction, 3),
+        "isSuspicious": is_suspicious,
+        "reasons": reasons if reasons else ["Normal login within established behavioural baseline"],
+        "mlAnomalyFraction": round(iso_score, 3),
+        "mlSuspiciousProb": round(rf_score, 3),
+        "modelUsed": model_name,
+        "featureVector": features_dict,
+        "evaluationTimestamp": datetime.now(timezone.utc).isoformat(),
     }
 
 
 # ---------------------------------------------------------------------------
-# FILE ACCESS SCORING
+# FILE ACCESS SCORING PIPELINE
 # ---------------------------------------------------------------------------
 
-SENSITIVITY_WEIGHT = {"public": 0, "internal": 0.2, "confidential": 0.6, "restricted": 1.0}
-ACTION_WEIGHT = {"view": 0.1, "modify": 0.4, "copy": 0.6, "download": 0.7, "delete": 1.0}
-
-
-def score_file_event(event: dict, baseline: dict | None, today_stats: dict | None) -> dict:
+def extract_file_features(event: dict, baseline: Optional[dict], today_stats: Optional[dict]) -> Tuple[np.ndarray, dict, List[str], int]:
     reasons = []
     rule_score = 0
 
-    sensitivity = event.get("sensitivityLevel", "internal")
-    action = event.get("action", "view")
-    file_name = event.get("fileName", "file")
+    sensitivity = str(event.get("sensitivityLevel") or "internal").lower()
+    action = str(event.get("action") or "view").lower()
+    file_name = str(event.get("fileName") or "document")
 
     sens_w = SENSITIVITY_WEIGHT.get(sensitivity, 0.2)
     act_w = ACTION_WEIGHT.get(action, 0.2)
 
     if sensitivity in ("confidential", "restricted"):
-        rule_score += 15
-        reasons.append(f"Access to {sensitivity} file: {file_name}")
+        rule_score += 20
+        reasons.append(f"Access to sensitive resource ({sensitivity}): {file_name}")
 
     if action in ("download", "copy", "delete"):
-        rule_score += 10
-        reasons.append(f"High-risk action performed: {action}")
+        rule_score += 15
+        reasons.append(f"High-impact file action performed: {action}")
 
-    avg_files = (baseline or {}).get("avgFilesAccessedPerDay", 3) or 3
-    max_files = (baseline or {}).get("maxFilesAccessedPerDay", 6) or 6
-    avg_conf = (baseline or {}).get("avgConfidentialFilesPerDay", 1) or 1
+    avg_files = float((baseline or {}).get("avgFilesAccessedPerDay", 3) or 3)
+    max_files = float((baseline or {}).get("maxFilesAccessedPerDay", 6) or 6)
+    avg_conf = float((baseline or {}).get("avgConfidentialFilesPerDay", 1) or 1)
 
-    total_today = (today_stats or {}).get("totalFilesToday", 1)
-    conf_today = (today_stats or {}).get("confidentialFilesToday", 0)
+    total_today = float((today_stats or {}).get("totalFilesToday", 1) or 1)
+    conf_today = float((today_stats or {}).get("confidentialFilesToday", 0) or 0)
 
-    volume_ratio = total_today / max(max_files, 1)
-    conf_ratio = conf_today / max(avg_conf, 1)
+    volume_ratio = total_today / max(max_files, 1.0)
+    conf_ratio = conf_today / max(avg_conf, 1.0)
 
-    if volume_ratio > 3:
+    if volume_ratio > 3.0:
         rule_score += 40
-        reasons.append(f"Abnormally high file access volume today ({total_today}) vs. baseline max ({max_files})")
-    elif volume_ratio > 1:
+        reasons.append(f"Abnormally high file access volume today ({int(total_today)}) vs. baseline limit ({int(max_files)})")
+    elif volume_ratio > 1.2:
         rule_score += 20
-        reasons.append(f"File access volume today ({total_today}) exceeds normal max ({max_files})")
+        reasons.append(f"File access volume today ({int(total_today)}) exceeds normal baseline ({int(max_files)})")
 
-    if conf_ratio > 5:
+    if conf_ratio > 4.0:
         rule_score += 30
-        reasons.append(f"Unusually high confidential/restricted file activity today ({conf_today})")
+        reasons.append(f"Unusually high confidential file activity ({int(conf_today)} events today vs baseline {avg_conf})")
 
-    # ---- Isolation Forest component ----
-    normal_samples = np.column_stack([
-        RNG.uniform(0, 0.3, size=200),                  # sensitivity weight, mostly low
-        RNG.uniform(0, 0.3, size=200),                  # action weight, mostly low
-        RNG.normal(1.0, 0.3, size=200).clip(0, 3),       # volume ratio ~ around 1 (normal)
-        RNG.normal(1.0, 0.5, size=200).clip(0, 3),       # confidential ratio ~ around 1
-    ]).astype(float)
+    features_dict = {
+        "sensitivity_weight": sens_w,
+        "action_weight": act_w,
+        "volume_ratio": round(min(volume_ratio, 6.0), 2),
+        "confidential_ratio": round(min(conf_ratio, 10.0), 2),
+    }
 
-    sample = np.array([sens_w, act_w, min(volume_ratio, 6), min(conf_ratio, 10)], dtype=float)
-    anomaly_fraction = _fit_and_score(normal_samples, sample)
+    feature_vector = np.array([sens_w, act_w, min(volume_ratio, 6.0), min(conf_ratio, 10.0)], dtype=float)
+    return feature_vector, features_dict, reasons, rule_score
 
-    ml_score = anomaly_fraction * 100
-    final_score = int(round(min(100, max(rule_score, 0.6 * rule_score + 0.4 * ml_score))))
+
+def score_file_event(event: dict, baseline: Optional[dict], today_stats: Optional[dict]) -> dict:
+    models = load_models()
+    feature_vector, features_dict, reasons, rule_score = extract_file_features(event, baseline, today_stats)
+
+    iso_score = 0.0
+    rf_score = 0.0
+    model_name = "Rule-based Baseline Scorer"
+
+    if models.get("loaded") and "file_iso" in models and "file_rf" in models:
+        try:
+            vec_2d = feature_vector.reshape(1, -1)
+            raw_decision = models["file_iso"].decision_function(vec_2d)[0]
+            iso_score = float(np.clip(1 / (1 + np.exp(raw_decision * 8)), 0.0, 1.0))
+
+            rf_prob = models["file_rf"].predict_proba(vec_2d)[0]
+            rf_score = float(rf_prob[1]) if len(rf_prob) > 1 else float(rf_prob[0])
+            model_name = "IsolationForest + RandomForest (Ensemble)"
+        except Exception as exc:
+            logger.warning("Error running ML models for file scoring: %s", exc)
+
+    if model_name.startswith("IsolationForest"):
+        ml_score = 0.5 * (iso_score * 100) + 0.5 * (rf_score * 100)
+        final_score = int(round(min(100, max(rule_score, 0.4 * rule_score + 0.6 * ml_score))))
+    else:
+        final_score = min(100, rule_score)
 
     risk_level = _risk_level(final_score)
+    is_suspicious = final_score >= 50
+
     return {
         "riskScore": final_score,
         "riskLevel": risk_level,
-        "isSuspicious": final_score >= 50,
-        "reasons": reasons if reasons else ["No significant deviation from baseline behaviour"],
-        "mlAnomalyFraction": round(anomaly_fraction, 3),
+        "isSuspicious": is_suspicious,
+        "reasons": reasons if reasons else ["Normal file activity within baseline limits"],
+        "mlAnomalyFraction": round(iso_score, 3),
+        "mlSuspiciousProb": round(rf_score, 3),
+        "modelUsed": model_name,
+        "featureVector": features_dict,
+        "evaluationTimestamp": datetime.now(timezone.utc).isoformat(),
     }

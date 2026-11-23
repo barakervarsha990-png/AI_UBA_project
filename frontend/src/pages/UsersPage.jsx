@@ -34,7 +34,7 @@ const UsersPage = () => {
                 <td>{u.department}</td>
                 <td>{u.jobTitle}</td>
                 <td>
-                  <span style={{ fontSize: 11.5, color: u.status === 'active' ? 'var(--signal-cyan)' : 'var(--text-low)' }}>
+                  <span style={{ fontSize: 11.5, fontWeight: 500, color: u.status === 'active' ? '#059669' : 'var(--text-low)' }}>
                     {u.status}
                   </span>
                 </td>

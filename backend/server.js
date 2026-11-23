@@ -18,6 +18,9 @@ const loginEventRoutes = require('./routes/loginEventRoutes');
 const fileEventRoutes = require('./routes/fileEventRoutes');
 const alertRoutes = require('./routes/alertRoutes');
 const simulateRoutes = require('./routes/simulateRoutes');
+const fileAccessRoutes = require('./routes/fileAccessRoutes');
+const policyRoutes = require('./routes/policyRoutes');
+const employeePortalRoutes = require('./routes/employeePortalRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -45,6 +48,9 @@ app.use('/api/login-events', loginEventRoutes);
 app.use('/api/file-events', fileEventRoutes);
 app.use('/api/alerts', alertRoutes);
 app.use('/api/simulate', simulateRoutes);
+app.use('/api/files', fileAccessRoutes);
+app.use('/api/settings/policy', policyRoutes);
+app.use('/api/employee', employeePortalRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
@@ -52,7 +58,7 @@ app.use(errorHandler);
 // ----- Socket.IO -----
 initSocket(io);
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5050;
 
 const start = async () => {
   await connectDB();

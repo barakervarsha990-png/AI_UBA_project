@@ -1,22 +1,47 @@
 import { NavLink } from 'react-router-dom';
 import {
-  LayoutDashboard, Users, LogIn, FileText, Bell, ShieldAlert, MapPin, Settings, Radar, LogOut,
+  LayoutDashboard,
+  Users,
+  LogIn,
+  FileText,
+  Bell,
+  ShieldAlert,
+  MapPin,
+  Settings,
+  Radar,
+  LogOut,
+  Terminal,
+  Briefcase,
+  User,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
-const links = [
+const socLinks = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/users', label: 'Users', icon: Users },
+  { to: '/portal', label: 'Live Demo Portal', icon: Terminal },
+  { to: '/users', label: 'Users Management', icon: Users },
   { to: '/login-activity', label: 'Login Activity', icon: LogIn },
   { to: '/file-activity', label: 'File Activity', icon: FileText },
-  { to: '/alerts', label: 'Alerts', icon: Bell },
+  { to: '/alerts', label: 'Security Alerts', icon: Bell },
   { to: '/risk-analysis', label: 'Risk Analysis', icon: ShieldAlert },
   { to: '/location-activity', label: 'Location Activity', icon: MapPin },
-  { to: '/settings', label: 'Settings', icon: Settings },
+  { to: '/settings', label: 'Settings & Policy', icon: Settings },
+];
+
+const employeeLinks = [
+  { to: '/employee-portal', label: 'My Workspace', icon: Briefcase, end: true },
 ];
 
 const Sidebar = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, isManagerOrAdmin } = useAuth();
+  const links = isManagerOrAdmin ? socLinks : employeeLinks;
+
+  const roleLabel =
+    user?.role === 'admin'
+      ? 'SOC ADMIN'
+      : user?.role === 'manager'
+      ? 'SECURITY MANAGER'
+      : `EMPLOYEE (${user?.employeeId || 'STAFF'})`;
 
   return (
     <aside className="sidebar">
@@ -24,7 +49,7 @@ const Sidebar = () => {
         <span className="dot" />
         <div className="sidebar-brand-text">
           SENTINEL
-          <span>BEHAVIOUR ANALYTICS</span>
+          <span>{isManagerOrAdmin ? 'BEHAVIOUR ANALYTICS' : 'EMPLOYEE PORTAL'}</span>
         </div>
       </div>
 
@@ -36,7 +61,7 @@ const Sidebar = () => {
             end={end}
             className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
           >
-            <Icon />
+            <Icon size={16} />
             {label}
           </NavLink>
         ))}
@@ -44,14 +69,18 @@ const Sidebar = () => {
 
       <div className="sidebar-footer">
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', marginBottom: 8 }}>
-          <Radar size={15} color="var(--signal-cyan)" />
-          <div>
-            <div style={{ fontSize: 12.5, fontWeight: 500 }}>{user?.fullName}</div>
-            <div style={{ fontSize: 10.5, color: 'var(--text-low)', fontFamily: 'var(--font-mono)' }}>SOC ADMIN</div>
+          <Radar size={16} color={isManagerOrAdmin ? '#4A90E2' : '#059669'} />
+          <div style={{ overflow: 'hidden' }}>
+            <div style={{ fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {user?.fullName || user?.username}
+            </div>
+            <div style={{ fontSize: 10, color: 'var(--text-low)', fontFamily: 'var(--font-mono)' }}>
+              {roleLabel}
+            </div>
           </div>
         </div>
         <div className="nav-link" onClick={logout} style={{ cursor: 'pointer' }}>
-          <LogOut />
+          <LogOut size={16} />
           Sign Out
         </div>
       </div>

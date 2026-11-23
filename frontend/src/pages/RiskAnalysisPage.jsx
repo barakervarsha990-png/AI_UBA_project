@@ -3,7 +3,16 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend, BarChart, Ba
 import api from '../services/api';
 import SeverityBadge from '../components/SeverityBadge';
 
-const SEV_COLORS = { LOW: '#33E6C9', MEDIUM: '#F2C14E', HIGH: '#F2884B', CRITICAL: '#FF4D6D' };
+const SEV_COLORS = { LOW: '#059669', MEDIUM: '#D97706', HIGH: '#EA580C', CRITICAL: '#DC2626' };
+
+const chartTooltipStyle = {
+  background: '#FFFFFF',
+  border: '1px solid #E5E7EB',
+  borderRadius: 8,
+  fontSize: 12,
+  color: '#26374A',
+  boxShadow: '0 4px 6px -1px rgba(38, 55, 74, 0.08)',
+};
 
 const RiskAnalysisPage = () => {
   const [users, setUsers] = useState([]);
@@ -31,7 +40,7 @@ const RiskAnalysisPage = () => {
               <Pie data={riskDistribution} dataKey="value" nameKey="name" innerRadius={55} outerRadius={85} paddingAngle={3}>
                 {riskDistribution.map((d) => <Cell key={d.name} fill={SEV_COLORS[d.name]} />)}
               </Pie>
-              <Tooltip contentStyle={{ background: 'var(--bg-raised)', border: '1px solid var(--line)', borderRadius: 8 }} />
+              <Tooltip contentStyle={chartTooltipStyle} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
             </PieChart>
           </ResponsiveContainer>
@@ -44,8 +53,8 @@ const RiskAnalysisPage = () => {
               <CartesianGrid stroke="var(--line)" vertical={false} />
               <XAxis dataKey="_id" tick={{ fill: 'var(--text-low)', fontSize: 11 }} />
               <YAxis tick={{ fill: 'var(--text-low)', fontSize: 11 }} />
-              <Tooltip contentStyle={{ background: 'var(--bg-raised)', border: '1px solid var(--line)', borderRadius: 8 }} />
-              <Bar dataKey="count" fill="#33E6C9" radius={[4, 4, 0, 0]} />
+              <Tooltip contentStyle={chartTooltipStyle} />
+              <Bar dataKey="count" fill="var(--primary, #A7C7E7)" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>

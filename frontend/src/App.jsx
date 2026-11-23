@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import AlertToastStack from './components/AlertToastStack';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -14,22 +14,26 @@ import AlertsPage from './pages/AlertsPage';
 import RiskAnalysisPage from './pages/RiskAnalysisPage';
 import LocationActivityPage from './pages/LocationActivityPage';
 import SettingsPage from './pages/SettingsPage';
+import DemoPortalPage from './pages/DemoPortalPage';
+import EmployeePortalPage from './pages/EmployeePortalPage';
 import { useAuth } from './context/AuthContext';
 
 const pageTitles = {
-'/': ['Dashboard', 'MY CUSTOM SOC CONSOLE'],
-  '/users': ['Users', 'MONITORED EMPLOYEE ACCOUNTS'],
-  '/login-activity': ['Login Activity', 'AUTHENTICATION TELEMETRY'],
-  '/file-activity': ['File Activity', 'CONFIDENTIAL DATA ACCESS LOG'],
-  '/alerts': ['Alerts', 'DETECTED THREAT EVENTS'],
-  '/risk-analysis': ['Risk Analysis', 'ANOMALY SCORING BREAKDOWN'],
-  '/location-activity': ['Location Activity', 'GEOGRAPHIC LOGIN DISTRIBUTION'],
-  '/settings': ['Settings', 'SYSTEM CONFIGURATION'],
+  '/': ['SOC Dashboard', 'REAL-TIME BEHAVIOUR & COMPANY POLICY OVERVIEW'],
+  '/portal': ['Live Demo & Attack Simulator', 'POLICY & THREAT SCENARIO SUITE'],
+  '/users': ['Users Management', 'MONITORED EMPLOYEE DIRECTORY'],
+  '/login-activity': ['Login Activity', 'AUTHENTICATION & POLICY TELEMETRY'],
+  '/file-activity': ['File Activity', 'DATA ACCESS & BULK DOWNLOAD MONITOR'],
+  '/alerts': ['Security Incident Alerts', 'POLICY VIOLATION & THREAT INCIDENTS'],
+  '/risk-analysis': ['Risk Analysis', 'UBA ANOMALY & POLICY SCORING ENGINE'],
+  '/location-activity': ['Location Activity', 'BENGALURU RESTRICTION & GEOGRAPHIC DISTRIBUTION'],
+  '/settings': ['Settings & Policy', 'WORKING TIME, LOCATION & SMTP CONFIGURATION'],
+  '/employee-portal': ['Employee Workspace', 'AUTHORIZED ACCESS & PERSONAL ACTIVITY'],
 };
 
 const AppShell = ({ children }) => {
   const path = window.location.pathname.replace(/\/users\/.+/, '/users');
-  const [title, sub] = pageTitles[path] || ['SENTINEL', 'SOC CONSOLE'];
+  const [title, sub] = pageTitles[path] || ['SENTINEL UBA', 'SECURITY OPERATIONS CONSOLE'];
 
   return (
     <div className="app-shell">
@@ -42,7 +46,7 @@ const AppShell = ({ children }) => {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11.5, color: 'var(--text-low)', fontFamily: 'var(--font-mono)' }}>
             <span className="pulse-dot" style={{ width: 6, height: 6 }} />
-            LIVE
+            LIVE &bull; ASIA/KOLKATA
           </div>
         </div>
         {children}
@@ -57,14 +61,31 @@ const App = () => {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+
+      {/* Employee dedicated portal route */}
       <Route
-        path="/*"
+        path="/employee-portal"
         element={
           <ProtectedRoute>
             <AlertProvider>
               <AppShell>
+                <EmployeePortalPage />
+              </AppShell>
+            </AlertProvider>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* SOC Manager / Admin Routes */}
+      <Route
+        path="/*"
+        element={
+          <ProtectedRoute requireManager={true}>
+            <AlertProvider>
+              <AppShell>
                 <Routes>
                   <Route path="/" element={<DashboardPage />} />
+                  <Route path="/portal" element={<DemoPortalPage />} />
                   <Route path="/users" element={<UsersPage />} />
                   <Route path="/users/:id" element={<UserDetailsPage />} />
                   <Route path="/login-activity" element={<LoginActivityPage />} />
@@ -73,6 +94,7 @@ const App = () => {
                   <Route path="/risk-analysis" element={<RiskAnalysisPage />} />
                   <Route path="/location-activity" element={<LocationActivityPage />} />
                   <Route path="/settings" element={<SettingsPage />} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </AppShell>
               <AlertToastStack />

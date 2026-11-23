@@ -20,10 +20,11 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('soc_token', token);
       localStorage.setItem('soc_user', JSON.stringify(u));
       setUser(u);
-      return true;
+      return { success: true, user: u };
     } catch (err) {
-      setError(err.response?.data?.message || 'Login failed');
-      return false;
+      const msg = err.response?.data?.message || 'Authentication failed. Please verify credentials.';
+      setError(msg);
+      return { success: false, error: msg };
     } finally {
       setLoading(false);
     }
@@ -35,8 +36,10 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   }, []);
 
+  const isManagerOrAdmin = user?.role === 'admin' || user?.role === 'manager';
+
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading, error }}>
+    <AuthContext.Provider value={{ user, login, logout, loading, error, isManagerOrAdmin }}>
       {children}
     </AuthContext.Provider>
   );

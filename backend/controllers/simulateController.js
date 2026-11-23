@@ -1,3 +1,4 @@
+const { v4: uuidv4 } = require('uuid');
 const User = require('../models/User');
 const Baseline = require('../models/Baseline');
 const LoginEvent = require('../models/LoginEvent');
@@ -68,6 +69,7 @@ const simulateAccountTakeover = async (req, res) => {
   });
 
   const loginEvent = await LoginEvent.create({
+    eventId: `EVT-${uuidv4()}`,
     userId: user._id,
     username: user.username,
     date,
@@ -168,6 +170,7 @@ const simulateInsiderThreat = async (req, res) => {
     latestScoreResult = scoreResult;
 
     const fileEvent = await FileEvent.create({
+      eventId: `FEVT-${uuidv4()}`,
       employeeId: user.employeeId,
       userId: user._id,
       username: user.username,

@@ -3,15 +3,16 @@ const bcrypt = require('bcryptjs');
 
 const UserSchema = new mongoose.Schema(
   {
-    employeeId: { type: String, required: true, unique: true },
-    username: { type: String, required: true, unique: true },
+    employeeId: { type: String, required: true, unique: true, index: true },
+    username: { type: String, required: true, unique: true, index: true },
     fullName: { type: String, required: true },
     email: { type: String, required: true, unique: true },
-    password: { type: String, required: true, select: false }, // used only for admin login
-    department: { type: String, default: 'General' },
-    role: { type: String, enum: ['admin', 'employee'], default: 'employee' },
-    jobTitle: { type: String, default: 'Staff' },
+    password: { type: String, required: true, select: false },
+    department: { type: String, default: 'Engineering' },
+    jobTitle: { type: String, default: 'Staff Member' },
+    role: { type: String, enum: ['admin', 'manager', 'employee'], default: 'employee' },
     status: { type: String, enum: ['active', 'disabled'], default: 'active' },
+    assignedLocation: { type: String, default: 'Bengaluru, Karnataka, India' },
     riskLevel: { type: String, enum: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'], default: 'LOW' },
     lastLoginAt: { type: Date },
   },

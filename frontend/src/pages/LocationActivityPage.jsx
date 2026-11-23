@@ -31,10 +31,10 @@ const LocationActivityPage = () => {
                 <td className="mono-cell">{l.count}</td>
                 <td className="mono-cell" style={{ color: l.suspicious > 0 ? 'var(--sev-critical)' : 'var(--text-mid)' }}>{l.suspicious}</td>
                 <td>
-                  <div style={{ background: 'var(--bg-void)', borderRadius: 4, height: 8, overflow: 'hidden' }}>
+                  <div style={{ background: '#E5E7EB', borderRadius: 4, height: 8, overflow: 'hidden' }}>
                     <div style={{
                       width: `${(l.count / maxCount) * 100}%`, height: '100%',
-                      background: l.suspicious > 0 ? 'var(--sev-critical)' : 'var(--signal-cyan)',
+                      background: l.suspicious > 0 ? 'var(--sev-critical)' : 'var(--primary-hover)',
                     }} />
                   </div>
                 </td>

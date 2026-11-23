@@ -1,0 +1,39 @@
+{
+  "version": "2.0.0",
+  "description": "Dual-Model Engine: Isolation Forest (Anomaly Detection) + Random Forest (Attack Classification)",
+  "trainedAt": "2026-10-26T12:00:00Z",
+  "models": {
+    "loginIsolationForest": "login_isolation_forest.joblib",
+    "loginRandomForest": "login_random_forest.joblib",
+    "fileIsolationForest": "file_isolation_forest.joblib",
+    "fileRandomForest": "file_random_forest.joblib"
+  },
+  "loginFeatures": [
+    "hour_of_day",
+    "hour_dev",
+    "is_new_country",
+    "is_new_device",
+    "is_new_ip",
+    "failed_attempts_in_window",
+    "is_after_failures",
+    "is_failed"
+  ],
+  "fileFeatures": [
+    "sensitivity_weight",
+    "action_weight",
+    "volume_ratio",
+    "confidential_ratio"
+  ],
+  "metrics": {
+    "loginRandomForestRocAuc": 1.0,
+    "fileRandomForestRocAuc": 1.0,
+    "loginDatasetSize": 1500,
+    "fileDatasetSize": 1200
+  },
+  "limitations": [
+    "Four initial demo users do not provide general-purpose universal training data.",
+    "Models are pre-trained on baseline normal telemetry combined with verified attack signatures (brute-force, ATO, off-hours, mass download).",
+    "Supervised Random Forest classification requires verified event labels; baseline heuristic risk scoring is used as a fallback if models are uninitialized.",
+    "Authentication failures are flagged as potential reconnaissance, not automatic account takeover unless ATO pattern (repeated failures followed by success from foreign/unregistered vector) is confirmed."
+  ]
+}

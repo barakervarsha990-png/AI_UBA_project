@@ -1,0 +1,9 @@
+Department,Band,Title,Min_Base_Salary,Mid_Base_Salary,Max_Base_Salary,Target_Bonus_Pct
+Engineering,L3,Software Engineer,75000,95000,115000,10%
+Engineering,L4,Senior Software Engineer,115000,140000,165000,15%
+Engineering,L5,Staff Software Engineer,160000,195000,230000,20%
+Finance,F3,Financial Analyst,70000,88000,105000,10%
+Finance,F4,Senior Financial Analyst,105000,128000,150000,15%
+HR,H3,HR Specialist,65000,80000,95000,8%
+IT Operations,T4,Security Operations Lead,120000,145000,170000,15%
+# [CONFIDENTIAL HR DATA] - Synthetic benchmark salary bands for authorized SOC simulation.

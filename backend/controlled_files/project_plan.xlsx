@@ -1,0 +1,6 @@
+Milestone,Task_Name,Owner,Target_Date,Status,Risk_Rating
+M1,Real-time Event Collector,DevOps Team,2026-10-28,Complete,Low
+M2,Isolation & Random Forest Ensemble,ML Team,2026-10-30,Complete,Medium
+M3,SOC Console Live Feeds,Frontend Team,2026-11-02,Complete,Low
+M4,Automated Threat Alert Notification,Security Team,2026-11-05,Complete,Low
+M5,Controlled File Access Auditing,Engineering Team,2026-11-08,Complete,Low
