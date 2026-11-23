@@ -27,6 +27,7 @@ app = FastAPI(
     version="2.0.0",
 )
 
+# Allow the Node backend to call this service. Restrict origins in production.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
