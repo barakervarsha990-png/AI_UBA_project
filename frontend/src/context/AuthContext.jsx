@@ -22,7 +22,14 @@ export const AuthProvider = ({ children }) => {
       setUser(u);
       return { success: true, user: u };
     } catch (err) {
-      const msg = err.response?.data?.message || 'Authentication failed. Please verify credentials.';
+      let msg = err.response?.data?.message;
+      if (!msg) {
+        if (err.message === 'Network Error' || !err.response) {
+          msg = 'Unable to connect to backend API server. Please verify backend deployment and network connection.';
+        } else {
+          msg = 'Authentication failed. Please verify credentials.';
+        }
+      }
       setError(msg);
       return { success: false, error: msg };
     } finally {

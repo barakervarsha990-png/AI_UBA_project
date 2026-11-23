@@ -57,20 +57,20 @@ const daysAgo = (n, hour, minute = 0) => {
   return d;
 };
 
-const run = async () => {
-  await connectDB();
-  console.log('[SEED] Connected to MongoDB. Clearing existing collections...');
-
-  await Promise.all([
-    User.deleteMany({}),
-    LoginEvent.deleteMany({}),
-    FileEvent.deleteMany({}),
-    Baseline.deleteMany({}),
-    Alert.deleteMany({}),
-    AuditLog.deleteMany({}),
-    Session.deleteMany({}),
-    CompanyPolicy.deleteMany({}),
-  ]);
+const seedDatabase = async ({ clearExisting = false } = {}) => {
+  if (clearExisting) {
+    console.log('[SEED] Clearing existing collections...');
+    await Promise.all([
+      User.deleteMany({}),
+      LoginEvent.deleteMany({}),
+      FileEvent.deleteMany({}),
+      Baseline.deleteMany({}),
+      Alert.deleteMany({}),
+      AuditLog.deleteMany({}),
+      Session.deleteMany({}),
+      CompanyPolicy.deleteMany({}),
+    ]);
+  }
 
   // ---------- 1. Company Security Policy ----------
   const policy = await CompanyPolicy.create({
@@ -528,11 +528,24 @@ const run = async () => {
   console.log(`  Admin Account:    admin / ChangeMe123!`);
   console.log('-------------------------------------------------------');
 
-  await mongoose.connection.close();
-  process.exit(0);
+  return {
+    employeesCount: employees.length,
+    totalLogins,
+    totalFiles,
+    totalAlerts,
+  };
 };
 
-run().catch((err) => {
-  console.error('[SEED] Failed:', err);
-  process.exit(1);
-});
+module.exports = { seedDatabase };
+
+if (require.main === module) {
+  (async () => {
+    await connectDB();
+    await seedDatabase({ clearExisting: true });
+    await mongoose.connection.close();
+    process.exit(0);
+  })().catch((err) => {
+    console.error('[SEED] Failed:', err);
+    process.exit(1);
+  });
+}
